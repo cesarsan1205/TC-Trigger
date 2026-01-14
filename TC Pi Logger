@@ -1,0 +1,33 @@
+import board
+import busio
+import digitalio
+import adafruit_rfm9x
+import time
+ 
+# Hardware Setup
+spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
+cs = digitalio.DigitalInOut(board.D8)
+reset = digitalio.DigitalInOut(board.D25)
+rfm9x = adafruit_rfm9x.RFM9x(spi, cs, reset, 915.0)
+ 
+print("Pi Ground Station: Listening for PING...")
+ 
+while True:
+    packet = rfm9x.receive(timeout=0.5)
+    if packet is not None:
+        try:
+            message = str(packet, "ascii").strip()
+ 
+            if "PING" in message:
+                print(f"Received: {message} -> Sending: PONG")
+                # Small delay to let Arduino switch to receive mode
+                time.sleep(0.1) 
+                rfm9x.send(bytes("PONG", "ascii"))
+ 
+            elif "START" in message:
+                print("!!! TRIGGER RECEIVED !!!")
+                # Log the launch
+                with open("launch_log.txt", "a") as f:
+                    f.write(f"Launch: {time.ctime()}\n")
+        except:
+            pass
