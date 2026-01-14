@@ -1,0 +1,93 @@
+#include <SPI.h>
+#include <RH_RF95.h>
+
+// Pins for Arduino Uno
+#define RFM95_CS 10
+#define RFM95_RST 9
+#define RFM95_INT 3
+
+// Change to 433.0 or other if required; matches your Pi
+#define RF95_FREQ 915.0
+
+// Define Button Pins
+#define TEST_BUTTON 6
+#define TRIGGER_BUTTON 4
+#define ledGreen 7
+#define ledRed 5
+
+RH_RF95 rf95(RFM95_CS, RFM95_INT);
+
+void setup() {
+  pinMode(TEST_BUTTON, INPUT_PULLUP);
+  pinMode(TRIGGER_BUTTON, INPUT_PULLUP);
+  
+  Serial.begin(9600);
+  while (!Serial) ; // Wait for serial console
+  
+  // Manual Reset
+  pinMode(RFM95_RST, OUTPUT);
+  digitalWrite(RFM95_RST, HIGH);
+  delay(100);
+  digitalWrite(RFM95_RST, LOW);
+  delay(10);
+  digitalWrite(RFM95_RST, HIGH);
+  delay(10);
+
+  if (!rf95.init()) {
+    Serial.println("LoRa radio init failed");
+    while (1);
+  }
+  
+  if (!rf95.setFrequency(RF95_FREQ)) {
+    Serial.println("setFrequency failed");
+    while (1);
+  }
+
+  // Set power to max for testing
+  rf95.setTxPower(23, false);
+  
+  // IMPORTANT: This makes the packet "Raw" so the Pi can read it easily
+  // No Promiscuous mode, just standard headers
+  Serial.println("Arduino Transmitter Ready!");
+}
+
+void loop() {
+  // --- TEST BUTTON LOGIC ---
+  if (digitalRead(TEST_BUTTON) == LOW) {
+    Serial.print("Sending PING...");
+    uint8_t data[] = "PING";
+    rf95.send(data, sizeof(data));
+    rf95.waitPacketSent();
+
+    // Now wait for a response (PONG)
+    uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+    uint8_t len = sizeof(buf);
+
+    if (rf95.waitAvailableTimeout(1000)) { // Wait up to 1 second
+      if (rf95.recv(buf, &len)) {
+        if (strstr((char*)buf, "PONG")) {
+          Serial.println(" Got PONG!");
+          // Blink 3 times
+          for(int i=0; i<3; i++) {
+            digitalWrite(ledGreen, HIGH); delay(500);
+            digitalWrite(ledGreen, LOW);  delay(500);
+          }
+        }
+      }
+    } else {
+      Serial.println(" No reply...");
+    }
+    delay(500);
+  }
+
+  // --- TRIGGER BUTTON LOGIC ---
+  if (digitalRead(TRIGGER_BUTTON) == LOW) {
+    Serial.print("Sending START...");
+    uint8_t data[] = "START";
+    rf95.send(data, sizeof(data));
+    rf95.waitPacketSent();
+    Serial.println(" Sent!");
+    digitalWrite(ledRed, HIGH); delay(3000);
+    delay(500);
+  }
+}
